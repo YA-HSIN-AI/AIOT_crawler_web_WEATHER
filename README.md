@@ -10,7 +10,7 @@ A lightweight Streamlit demo that **fetches Taiwan CWA (Central Weather Administ
 ---
 
 ## 🔗 Demo
-- Streamlit App: **(paste your Streamlit URL here)**  
+- Streamlit App: **(https://aiotcrawlerwebweather-ghr3kf78nbiqnksni5voyk.streamlit.app/)**  
   
 
 ---
