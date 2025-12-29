@@ -19,17 +19,25 @@ st.set_page_config(
 # ===============================
 DATA_DIR = "weather_data"
 
-def load_latest_json():
-    if not os.path.exists(DATA_DIR):
-        return None
+data = load_latest_json()
 
-    files = [f for f in os.listdir(DATA_DIR) if f.endswith(".json")]
-    if not files:
-        return None
+if data is None:
+    st.warning("⚠️ 尚未載入氣象預報資料（Cloud 沒有本機檔案）")
 
-    latest_file = sorted(files)[-1]
-    with open(os.path.join(DATA_DIR, latest_file), "r", encoding="utf-8") as f:
-        return json.load(f)
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        run = st.button("🔄 立即抓取最新預報")
+
+    with col2:
+        st.caption("按下後會在雲端執行 crawler.py 下載資料並產生 weather_data/*.json")
+
+    if run:
+        with st.spinner("正在抓取資料..."):
+            subprocess.run([sys.executable, "crawler.py"], check=False)
+        st.success("抓取完成，正在重新載入頁面...")
+        st.rerun()
+
+    st.stop()
 
 # ===============================
 # Sidebar – 情境設定（預報解讀）
