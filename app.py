@@ -18,20 +18,49 @@ st.set_page_config(
 # Data loader（最新預報 JSON）
 # ===============================
 DATA_DIR = "weather_data"
+if data is None:
+    st.warning("⚠️ 尚未載入氣象預報資料")
 
-def load_latest_json():
-    if not os.path.exists(DATA_DIR):
-        return None, None
+    if st.button("🔄 抓最新資料"):
+        import subprocess, sys, time
 
-    files = [f for f in os.listdir(DATA_DIR) if f.endswith(".json")]
-    if not files:
-        return None, None
+        os.makedirs(DATA_DIR, exist_ok=True)
 
-    latest_file = sorted(files)[-1]
-    path = os.path.join(DATA_DIR, latest_file)
+        p = subprocess.run(
+            [sys.executable, "crawler.py"],
+            capture_output=True,
+            text=True
+        )
 
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f), latest_file
+        st.write("returncode =", p.returncode)
+        if p.stdout:
+            st.code(p.stdout)
+        if p.stderr:
+            st.code(p.stderr)
+
+        # ✅ 立即驗證：到底有沒有產生 json
+        files = []
+        if os.path.exists(DATA_DIR):
+            files = [f for f in os.listdir(DATA_DIR) if f.endswith(".json")]
+
+        if p.returncode != 0 or len(files) == 0:
+            st.error("❌ 抓取失敗：沒有產生任何 JSON（請看上方 stdout/stderr）")
+            st.stop()
+
+        st.success(f"✅ 抓取完成：{len(files)} 個 JSON")
+        time.sleep(0.5)
+        st.rerun()
+
+    with st.expander("🔎 Debug：目前 weather_data 內容"):
+        st.write("DATA_DIR =", DATA_DIR)
+        st.write("exists?", os.path.exists(DATA_DIR))
+        if os.path.exists(DATA_DIR):
+            st.write(os.listdir(DATA_DIR))
+
+    st.stop()
+
+
+
 
 
 # ===============================
