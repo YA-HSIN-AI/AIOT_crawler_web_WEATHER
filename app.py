@@ -69,12 +69,31 @@ data ,latest_file = load_latest_json()
 
 if data is None:
     st.warning("⚠️ 尚未載入氣象預報資料")
+
     if st.button("🔄 抓最新資料"):
-        # subprocess 跑 crawler.py
-        ...
+        import subprocess, sys
+
+        os.makedirs(DATA_DIR, exist_ok=True)
+
+        # 用目前環境的 python 去跑 crawler.py
+        p = subprocess.run([sys.executable, "crawler.py"], capture_output=True, text=True)
+
+        if p.returncode != 0:
+            st.error("❌ crawler.py 執行失敗（請看錯誤訊息）")
+            st.code(p.stderr or p.stdout)
+            st.stop()
+
+        st.success("✅ 抓取完成！正在重新載入…")
+        st.rerun()
+
+    with st.expander("🔎 Debug：目前 weather_data 內容"):
+        st.write("DATA_DIR =", DATA_DIR)
+        st.write("exists?", os.path.exists(DATA_DIR))
+        if os.path.exists(DATA_DIR):
+            st.write(os.listdir(DATA_DIR))
+
     st.stop()
 
-st.success(f"✅ 已載入：{latest_file}")
 
 # ===============================
 # 🧭 分析情境 – 視覺卡片
