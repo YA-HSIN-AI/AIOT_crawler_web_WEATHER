@@ -22,33 +22,19 @@ if data is None:
     st.warning("⚠️ 尚未載入氣象預報資料")
 
     if st.button("🔄 抓最新資料"):
-        import subprocess, sys, time
+        import subprocess, sys
 
         os.makedirs(DATA_DIR, exist_ok=True)
 
-        p = subprocess.run(
-            [sys.executable, "crawler.py"],
-            capture_output=True,
-            text=True
-        )
+        # 用目前環境的 python 去跑 crawler.py
+        p = subprocess.run([sys.executable, "crawler.py"], capture_output=True, text=True)
 
-        st.write("returncode =", p.returncode)
-        if p.stdout:
-            st.code(p.stdout)
-        if p.stderr:
-            st.code(p.stderr)
-
-        # ✅ 立即驗證：到底有沒有產生 json
-        files = []
-        if os.path.exists(DATA_DIR):
-            files = [f for f in os.listdir(DATA_DIR) if f.endswith(".json")]
-
-        if p.returncode != 0 or len(files) == 0:
-            st.error("❌ 抓取失敗：沒有產生任何 JSON（請看上方 stdout/stderr）")
+        if p.returncode != 0:
+            st.error("❌ crawler.py 執行失敗（請看錯誤訊息）")
+            st.code(p.stderr or p.stdout)
             st.stop()
 
-        st.success(f"✅ 抓取完成：{len(files)} 個 JSON")
-        time.sleep(0.5)
+        st.success("✅ 抓取完成！正在重新載入…")
         st.rerun()
 
     with st.expander("🔎 Debug：目前 weather_data 內容"):
@@ -58,6 +44,9 @@ if data is None:
             st.write(os.listdir(DATA_DIR))
 
     st.stop()
+
+
+
 
 
 
