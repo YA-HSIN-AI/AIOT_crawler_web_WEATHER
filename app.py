@@ -3,6 +3,8 @@ import streamlit as st
 import os
 import json
 import pandas as pd
+import subprocess
+import sys
 
 # ===============================
 # Page config
@@ -19,15 +21,18 @@ DATA_DIR = "weather_data"
 
 def load_latest_json():
     if not os.path.exists(DATA_DIR):
-        return None
+        return None, None
 
     files = [f for f in os.listdir(DATA_DIR) if f.endswith(".json")]
     if not files:
-        return None
+        return None, None
 
     latest_file = sorted(files)[-1]
-    with open(os.path.join(DATA_DIR, latest_file), "r", encoding="utf-8") as f:
-        return json.load(f)
+    path = os.path.join(DATA_DIR, latest_file)
+
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f), latest_file
+
 
 # ===============================
 # Sidebar – 情境設定（預報解讀）
@@ -60,13 +65,16 @@ st.sidebar.info(
 # ===============================
 st.title("🌤️ 一週農業氣象預報 + 農業積溫分析")
 
-data = load_latest_json()
+data ,latest_file = load_latest_json()
 
 if data is None:
-    st.warning("⚠️ 尚未載入氣象預報資料，請先執行 crawler")
+    st.warning("⚠️ 尚未載入氣象預報資料")
+    if st.button("🔄 抓最新資料"):
+        # subprocess 跑 crawler.py
+        ...
     st.stop()
 
-st.success("✅ 已成功載入最新一週氣象預報資料")
+st.success(f"✅ 已載入：{latest_file}")
 
 # ===============================
 # 🧭 分析情境 – 視覺卡片
@@ -185,5 +193,9 @@ st.markdown(f"""
 # ===============================
 with st.expander("📦 原始氣象預報 JSON（技術佐證）"):
     st.json(data)
+#======================
+st.write("DIR exists?", os.path.exists(DATA_DIR), "DATA_DIR =", DATA_DIR)
+if os.path.exists(DATA_DIR):
+    st.write("Files:", os.listdir(DATA_DIR))
 
 
