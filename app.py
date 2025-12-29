@@ -1,13 +1,13 @@
-
 import streamlit as st
 import os
 import json
 import pandas as pd
 import subprocess
 import sys
+import time
 
 # ===============================
-# Page config
+# Page config (一定要放最上面，不能在其他 st.* 後面)
 # ===============================
 st.set_page_config(
     page_title="一週農業氣象預報 + 農業積溫分析（預報解讀）",
@@ -18,39 +18,38 @@ st.set_page_config(
 # Data loader（最新預報 JSON）
 # ===============================
 DATA_DIR = "weather_data"
-if data is None:
-    st.warning("⚠️ 尚未載入氣象預報資料")
 
-    if st.button("🔄 抓最新資料"):
-        import subprocess, sys
+def load_latest_json():
+    if not os.path.exists(DATA_DIR):
+        return None, None
 
-        os.makedirs(DATA_DIR, exist_ok=True)
+    files = [f for f in os.listdir(DATA_DIR) if f.endswith(".json")]
+    if not files:
+        return None, None
 
-        # 用目前環境的 python 去跑 crawler.py
-        p = subprocess.run([sys.executable, "crawler.py"], capture_output=True, text=True)
+    latest_file = sorted(files)[-1]
+    path = os.path.join(DATA_DIR, latest_file)
 
-        if p.returncode != 0:
-            st.error("❌ crawler.py 執行失敗（請看錯誤訊息）")
-            st.code(p.stderr or p.stdout)
-            st.stop()
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f), latest_file
+    except Exception as e:
+        return {"_error": str(e), "_file": latest_file}, latest_file
 
-        st.success("✅ 抓取完成！正在重新載入…")
-        st.rerun()
+def run_crawler():
+    """
+    在 Streamlit Cloud 內執行 crawler.py
+    - 把 stdout/stderr 回傳顯示，方便 debug
+    """
+    os.makedirs(DATA_DIR, exist_ok=True)
 
-    with st.expander("🔎 Debug：目前 weather_data 內容"):
-        st.write("DATA_DIR =", DATA_DIR)
-        st.write("exists?", os.path.exists(DATA_DIR))
-        if os.path.exists(DATA_DIR):
-            st.write(os.listdir(DATA_DIR))
+    p = subprocess.run(
+        [sys.executable, "crawler.py"],
+        capture_output=True,
+        text=True
+    )
 
-    st.stop()
-
-
-
-
-
-
-
+    return p.returncode, p.stdout, p.stderr
 
 # ===============================
 # Sidebar – 情境設定（預報解讀）
@@ -59,12 +58,14 @@ st.sidebar.header("🔧 情境設定")
 
 region = st.sidebar.selectbox(
     "📍 分析地區（示範）",
-    ["全台"]
+    ["全台"],
+    key="region_select"
 )
 
 crop = st.sidebar.selectbox(
     "🌾 作物類型",
-    ["水稻", "玉米", "高麗菜", "番茄"]
+    ["水稻", "玉米", "高麗菜", "番茄"],
+    key="crop_select"
 )
 
 st.sidebar.markdown("### 📅 預報期間")
@@ -83,27 +84,40 @@ st.sidebar.info(
 # ===============================
 st.title("🌤️ 一週農業氣象預報 + 農業積溫分析")
 
-data ,latest_file = load_latest_json()
+# 先讀本地資料（雲端第一次通常沒有）
+data, latest_file = load_latest_json()
 
+# ===============================
+# 沒資料時：顯示「抓最新資料」按鈕（雲端必備）
+# ===============================
 if data is None:
-    st.warning("⚠️ 尚未載入氣象預報資料")
+    st.warning("⚠️ 尚未載入氣象預報資料（weather_data 目前沒有 JSON）")
 
-    if st.button("🔄 抓最新資料"):
-        import subprocess, sys
+    # 按鈕：抓最新資料
+    if st.button("🔄 抓最新資料", use_container_width=True):
+        with st.spinner("正在執行 crawler.py 抓取最新資料..."):
+            code, out, err = run_crawler()
 
-        os.makedirs(DATA_DIR, exist_ok=True)
+        st.write("returncode =", code)
+        if out:
+            st.code(out)
+        if err:
+            st.code(err)
 
-        # 用目前環境的 python 去跑 crawler.py
-        p = subprocess.run([sys.executable, "crawler.py"], capture_output=True, text=True)
+        # 檢查是否真的產生 json
+        files = []
+        if os.path.exists(DATA_DIR):
+            files = [f for f in os.listdir(DATA_DIR) if f.endswith(".json")]
 
-        if p.returncode != 0:
-            st.error("❌ crawler.py 執行失敗（請看錯誤訊息）")
-            st.code(p.stderr or p.stdout)
+        if code != 0 or len(files) == 0:
+            st.error("❌ 抓取失敗：沒有產生任何 JSON（請看上方 stdout/stderr）")
             st.stop()
 
-        st.success("✅ 抓取完成！正在重新載入…")
+        st.success(f"✅ 抓取完成：{len(files)} 個 JSON，準備重新載入")
+        time.sleep(0.5)
         st.rerun()
 
+    # Debug：看看資料夾到底有沒有東西
     with st.expander("🔎 Debug：目前 weather_data 內容"):
         st.write("DATA_DIR =", DATA_DIR)
         st.write("exists?", os.path.exists(DATA_DIR))
@@ -112,6 +126,12 @@ if data is None:
 
     st.stop()
 
+# 如果 data 有讀到但內容是 error
+if isinstance(data, dict) and "_error" in data:
+    st.error(f"❌ JSON 讀取失敗：{data['_file']} / {data['_error']}")
+    st.stop()
+
+st.success(f"✅ 已成功載入最新一週氣象預報資料：{latest_file}")
 
 # ===============================
 # 🧭 分析情境 – 視覺卡片
@@ -153,18 +173,16 @@ with c2:
     )
 
 # ===============================
-# 🌱 溫度對作物影響（預報解讀）
+# 🌱 溫度對作物影響（預報解讀）- 先用示意溫度
 # ===============================
 st.subheader("🌱 一週溫度條件對作物影響（預估）")
 
-# === 預報示意用溫度（未來 7 天） ===
 temps = [18, 20, 22, 23, 21, 19, 18]
 
 avg_temp = sum(temps) / len(temps)
 min_temp = min(temps)
 max_temp = max(temps)
 
-# === 作物適宜溫度區間（簡化模型） ===
 crop_temp_range = {
     "水稻": (20, 30),
     "玉米": (18, 30),
@@ -174,7 +192,6 @@ crop_temp_range = {
 
 opt_min, opt_max = crop_temp_range[crop]
 
-# === 預報解讀判斷 ===
 if avg_temp < opt_min:
     impact_level = "偏低"
     impact_icon = "⚠️"
@@ -188,9 +205,7 @@ else:
     impact_icon = "✅"
     impact_desc = "氣溫條件適中，有利作物正常生長。"
 
-# === 指標卡 ===
 colA, colB, colC = st.columns(3)
-
 colA.metric("🌡️ 一週平均溫度", f"{avg_temp:.1f} °C")
 colB.metric("🌾 作物適宜溫度", f"{opt_min}–{opt_max} °C")
 colC.metric("📊 綜合解讀", f"{impact_icon} {impact_level}")
@@ -211,7 +226,7 @@ st.info(
 st.subheader("📊 一週農業氣象預報解讀（溫度趨勢）")
 
 temp_df = pd.DataFrame({
-    "預報日": ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7"],
+    "預報日": [f"Day {i}" for i in range(1, 8)],
     "平均溫度 (°C)": temps
 })
 
@@ -230,9 +245,3 @@ st.markdown(f"""
 # ===============================
 with st.expander("📦 原始氣象預報 JSON（技術佐證）"):
     st.json(data)
-#======================
-st.write("DIR exists?", os.path.exists(DATA_DIR), "DATA_DIR =", DATA_DIR)
-if os.path.exists(DATA_DIR):
-    st.write("Files:", os.listdir(DATA_DIR))
-
-
